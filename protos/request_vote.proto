@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/raft/protos/vote";
+option go_package = "raft/protos/vote";
 
 service RequestVote {
     rpc GetVote(RequestVoteDetail) returns (RequestVoteResponse);
