@@ -1,7 +1,11 @@
-package main
+package raft
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/fs"
+	"log"
+	"os"
 )
 
 const (
@@ -10,17 +14,82 @@ const (
 	Leader    = "Leader"
 )
 
+var (
+	CurrentNode *Node
+	nodeDetail = ".config/node-detail.json"
+)
+
+func getArrayElement(slice []string, element string) (int, error) {
+	for idx, name := range slice {
+		if name == element {
+			return idx, nil
+		}
+	}
+	return -1, fmt.Errorf("element not found")
+}
+
+func removeArrayElement(slice []string, idx int) []string {
+	slice = append(slice[:idx], slice[idx:]...)
+	return slice
+}
+
 type Node struct {
-	CurrentTerm int64  /* Store the term we're in atm */
-	VotedFor    string /* CandidateId that received vote */
-	State       string /* Current state of the node */
+	CurrentTerm int64  `json:"current_term,omitempty"` /* Store the term we're in atm */
+	VotedFor    string `json:"voted_for,omitempty"`    /* CandidateId that received vote */
+	State       string `json:"state,omitempty"`        /* Current state of the node */
 	// Net         *Message /* Communication method */
-	Name        string   /* Node name */
-	CommitIndex int      /* Index of highest log entry known to be committed */
-	LastApplied int      /* Index of highest log entry applied to state machine */
-	Nodes       []string /* Nodes in cluster */
-	LogEntry    []*Entry /* Command Entries */
-	TimeOut     int      /*  */
+	Name         string   `json:"name,omitempty"`         /* Node name */
+	CommitIndex  int      `json:"commit_index,omitempty"` /* Index of highest log entry known to be committed */
+	LastApplied  int      `json:"last_applied,omitempty"` /* Index of highest log entry applied to state machine */
+	Nodes        []string `json:"nodes,omitempty"`        /* Nodes in cluster */
+	LogEntryPath string   `json:"log_entry,omitempty"`    /* Command Entries */
+	TimeOut      int      `json:"time_out,omitempty"`     /*  */
+}
+
+func NewNode(serverName string, clusterNodes []string) *Node {
+	srvIndex, err := getArrayElement(clusterNodes, serverName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	clusterNodes = removeArrayElement(clusterNodes, srvIndex)
+	return &Node{
+		State: Follower,
+		Name:  serverName,
+		Nodes: clusterNodes,
+	}
+}
+
+func (n *Node) GetNodeFromFile() *Node {
+	buf := []byte{}
+	store := NewDiskStore(nodeDetail)
+	fileObj, err := store.CreateFile(0644, os.O_WRONLY)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := store.ReadFile(buf, fileObj); err != nil {
+		log.Fatal(err)
+	}
+	node := Node{}
+	if err := json.Unmarshal(buf, &node); err != nil {
+		log.Fatal(err)
+	}
+	return &node
+}
+
+func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {
+	buf, err := json.Marshal(n)
+	if err != nil {
+		return fmt.Errorf("unable to serialize to Json: %v", err)
+	}
+	store := NewDiskStore(nodeDetail)
+	fileObj, err := store.CreateFile(perm, flag)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := store.WriteFile(buf, fileObj); err != nil {
+		return fmt.Errorf("failed %v", err)
+	}
+	return nil
 }
 
 func (n *Node) String() string {
@@ -41,7 +110,8 @@ func (n *Node) setName(name string) {
 func (n *Node) SendRequestVote() {
 	requestVoteMsg := RequestVoteMsg{}
 	totalVote := 0
-
+	n.CurrentTerm++ /* Increment term by 1 */
+	totalVote++     /* Vote for myself */
 	for _, srv_node := range n.Nodes {
 		vote_response := requestVoteMsg.Send(srv_node, n.CurrentTerm, n.Name, 0, 0)
 
@@ -60,7 +130,7 @@ func (n *Node) SendRequestVote() {
 	}
 }
 
-func (n *Node) VoteForClient(client_name string, term int64, lastLogIdx int, lastLogTerm int) (int64, bool) {
+func (n *Node) VoteForClient(client_name string, term int64, lastLogIdx int64, lastLogTerm int64) (int64, bool) {
 	if term > n.CurrentTerm {
 		n.State = Follower
 		n.CurrentTerm = term

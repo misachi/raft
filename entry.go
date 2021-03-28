@@ -1,4 +1,4 @@
-package main
+package raft
 
 type Entry struct {
 	Id      int         /* Entry index. Increases monotonically */
