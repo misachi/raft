@@ -2,20 +2,18 @@ package main
 
 import (
 	"fmt"
-	"sync"
 )
 
 const (
-	Follower = iota
-	Candidate
-	Leader
+	Follower  = "Follower"
+	Candidate = "Candidate"
+	Leader    = "Leader"
 )
 
 type Node struct {
-	mut         *sync.Mutex
-	CurrentTerm int    /* Store the term we're in atm */
+	CurrentTerm int64  /* Store the term we're in atm */
 	VotedFor    string /* CandidateId that received vote */
-	State       int    /* Current state of the node */
+	State       string /* Current state of the node */
 	// Net         *Message /* Communication method */
 	Name        string   /* Node name */
 	CommitIndex int      /* Index of highest log entry known to be committed */
@@ -25,16 +23,8 @@ type Node struct {
 	TimeOut     int      /*  */
 }
 
-func (n *Node) getServerStateStr() string {
-	switch n.State {
-	case Follower:
-		return "Follower"
-	case Candidate:
-		return "Candidate"
-	case Leader:
-		return "Leader"
-	}
-	return ""
+func (n *Node) String() string {
+	return fmt.Sprintf("Name: %s State: %s Term: %d", n.Name, n.State, n.CurrentTerm)
 }
 
 func (n *Node) avgNodeCount() int {
@@ -70,7 +60,7 @@ func (n *Node) SendRequestVote() {
 	}
 }
 
-func (n *Node) voteForClient(client_name string, term int, lastLogIdx int, lastLogTerm int) (int, bool) {
+func (n *Node) VoteForClient(client_name string, term int64, lastLogIdx int, lastLogTerm int) (int64, bool) {
 	if term > n.CurrentTerm {
 		n.State = Follower
 		n.CurrentTerm = term

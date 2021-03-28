@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/raft/protos/vote"
+	pb "github.com/misachi/raft/protos/requestvote"
 )
 
 type Message interface {
@@ -20,7 +20,7 @@ type RequestVoteMsg struct{}
 func (r *RequestVoteMsg) getConnection(srv_name string) (context.Context, *grpc.ClientConn) {
 	conn, err := grpc.Dial(srv_name, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
-		log.Fatal("Could not connect to remote server: %v", err)
+		log.Fatalf("Could not connect to remote server: %v", err)
 	}
 	defer conn.Close()
 
@@ -29,16 +29,20 @@ func (r *RequestVoteMsg) getConnection(srv_name string) (context.Context, *grpc.
 	return ctx, conn
 }
 
-func (r *RequestVoteMsg) Send(server_name string, term int, cId string, lastLogIdx int, lastLogTerm int) *pb.RequestVoteResponse {
+func (r *RequestVoteMsg) Send(server_name string, term int64, cId string, lastLogIdx int64, lastLogTerm int64) *pb.RequestVoteResponse {
 	ctx, conn := r.getConnection((server_name))
 
 	client := pb.NewRequestVoteClient(conn)
-	return client.GetVote(ctx,
+	response, err := client.GetVote(ctx,
 		&pb.RequestVoteDetail{
 			Term:         term,
 			LastLogIndex: lastLogIdx,
 			LastLogTerm:  lastLogTerm,
 			CandidateId:  cId})
+	if err != nil {
+		log.Fatalf("Error when sending requestVote: %v", err)
+	}
+	return response
 }
 
 func (r *RequestVoteMsg) Receive() {}
