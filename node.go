@@ -16,7 +16,7 @@ const (
 
 var (
 	CurrentNode *Node
-	nodeDetail = ".config/node-detail.json"
+	nodeDetail  = fmt.Sprintf("%s/.config/node-detail.json", os.Getenv("HOME"))
 )
 
 func getArrayElement(slice []string, element string) (int, error) {
@@ -59,7 +59,7 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 	}
 }
 
-func (n *Node) GetNodeFromFile() *Node {
+func ReadNodeFile() *Node {
 	buf := []byte{}
 	store := NewDiskStore(nodeDetail)
 	fileObj, err := store.CreateFile(0644, os.O_WRONLY)
@@ -74,6 +74,10 @@ func (n *Node) GetNodeFromFile() *Node {
 		log.Fatal(err)
 	}
 	return &node
+}
+
+func (n *Node) GetNodeFromFile() *Node {
+	return ReadNodeFile()
 }
 
 func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {

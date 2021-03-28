@@ -45,7 +45,7 @@ func (d *DiskStore) CreateFile(perm fs.FileMode, flag int) (*os.File, error) {
 	}
 
 	filePath := filepath.Join(d.StoreDir, d.FileName)
-	err := os.MkdirAll(filePath, os.ModePerm)
+	err := os.MkdirAll(d.StoreDir, os.ModePerm)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create directory: %v", err)
 	}
