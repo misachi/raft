@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"unsafe"
 
 	"github.com/misachi/raft"
 	pb "github.com/misachi/raft/protos/requestvote"
@@ -17,8 +18,8 @@ type RequestVoteServer struct {
 }
 
 func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteDetail) (*pb.RequestVoteResponse, error) {
-	node := raft.ReadNodeFile()
-	fmt.Println(node)
+	buf := make([]byte, int(unsafe.Sizeof(raft.Node{})))
+	node := raft.ReadNodeFile(buf)
 	term, voted := node.VoteForClient(detail.CandidateId, detail.Term, detail.LastLogIndex, detail.LastLogTerm)
 	return &pb.RequestVoteResponse{Term: term, VoteGranted: voted}, nil
 }
@@ -31,7 +32,6 @@ func main() {
 		log.Fatalf("Error starting up server: %v", err)
 	}
 	node := raft.NewNode(serverName, nodes)
-	fmt.Println(node)
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}

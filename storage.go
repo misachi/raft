@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -56,7 +57,7 @@ func (d *DiskStore) CreateFile(perm fs.FileMode, flag int) (*os.File, error) {
 	return file, nil
 }
 
-func (d *DiskStore) ReadFile(buf []byte, file *os.File) error {
+func (d *DiskStore) ReadFile(buf []byte, file *os.File) (int, error) {
 	if file == nil {
 		newFile, err := d.CreateFile(0644, os.O_WRONLY|os.O_CREATE)
 		if file == nil {
@@ -66,13 +67,17 @@ func (d *DiskStore) ReadFile(buf []byte, file *os.File) error {
 	}
 	nRead, err := file.Read(buf)
 	if err != nil {
-		log.Fatalf("Error when reading file: %v", err)
+		if err == io.EOF {
+			fmt.Println("we have reached end of file")
+		} else {
+			log.Fatalf("Error when reading file: %v", err)
+		}
 	}
 
 	if nRead <= 0 {
-		return fmt.Errorf("file is empty")
+		return nRead, fmt.Errorf("file is empty")
 	}
-	return nil
+	return nRead, nil
 }
 
 func (d *DiskStore) WriteFile(buf []byte, file *os.File) error {

@@ -34,10 +34,9 @@ func removeArrayElement(slice []string, idx int) []string {
 }
 
 type Node struct {
-	CurrentTerm int64  `json:"current_term,omitempty"` /* Store the term we're in atm */
-	VotedFor    string `json:"voted_for,omitempty"`    /* CandidateId that received vote */
-	State       string `json:"state,omitempty"`        /* Current state of the node */
-	// Net         *Message /* Communication method */
+	CurrentTerm  int64    `json:"current_term,omitempty"` /* Store the term we're in atm */
+	VotedFor     string   `json:"voted_for,omitempty"`    /* CandidateId that received vote */
+	State        string   `json:"state,omitempty"`        /* Current state of the node */
 	Name         string   `json:"name,omitempty"`         /* Node name */
 	CommitIndex  int      `json:"commit_index,omitempty"` /* Index of highest log entry known to be committed */
 	LastApplied  int      `json:"last_applied,omitempty"` /* Index of highest log entry applied to state machine */
@@ -59,25 +58,30 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 	}
 }
 
-func ReadNodeFile() *Node {
-	buf := []byte{}
+func ReadNodeFile(buf []byte) *Node {
 	store := NewDiskStore(nodeDetail)
-	fileObj, err := store.CreateFile(0644, os.O_WRONLY)
+	fileObj, err := store.CreateFile(0644, os.O_RDONLY)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := store.ReadFile(buf, fileObj); err != nil {
-		log.Fatal(err)
+	defer fileObj.Close()
+	total := 0
+	for {
+		nRead, err := store.ReadFile(buf, fileObj)
+		if err != nil {
+			break
+		}
+		total += nRead
 	}
 	node := Node{}
-	if err := json.Unmarshal(buf, &node); err != nil {
+	if err := json.Unmarshal(buf[:total], &node); err != nil {
 		log.Fatal(err)
 	}
 	return &node
 }
 
-func (n *Node) GetNodeFromFile() *Node {
-	return ReadNodeFile()
+func (n *Node) GetNodeFromFile(buf []byte) *Node {
+	return ReadNodeFile(buf)
 }
 
 func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {
@@ -90,6 +94,7 @@ func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer fileObj.Close()
 	if err := store.WriteFile(buf, fileObj); err != nil {
 		return fmt.Errorf("failed %v", err)
 	}
