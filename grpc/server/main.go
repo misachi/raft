@@ -21,12 +21,16 @@ func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteD
 	buf := make([]byte, int(unsafe.Sizeof(raft.Node{})))
 	node := raft.ReadNodeFile(buf)
 	term, voted := node.VoteForClient(detail.CandidateId, detail.Term, detail.LastLogIndex, detail.LastLogTerm)
+	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
+		log.Fatal(err)
+	}
 	return &pb.RequestVoteResponse{Term: term, VoteGranted: voted}, nil
 }
 
 func main() {
-	serverName := fmt.Sprintf("localhost:%d", 4000)
-	nodes := []string{serverName}
+	/* The addresses are for tests only */
+	serverName := fmt.Sprintf("172.24.0.2:%d", 4002)
+	nodes := []string{"172.24.0.3:4000"}
 	lis, err := net.Listen("tcp", serverName)
 	if err != nil {
 		log.Fatalf("Error starting up server: %v", err)

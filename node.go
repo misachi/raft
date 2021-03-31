@@ -144,14 +144,18 @@ func (n *Node) SendRequestVote() {
 			if new_term >= n.CurrentTerm && !vote_response.GetVoteGranted() {
 				n.CurrentTerm = new_term
 				n.State = Follower
-				return
+				goto done
 			}
 			totalVote++
 			if totalVote >= n.avgNodeCount() {
 				n.State = Leader
-				return
+				goto done
 			}
 		}
+	}
+done:
+	if err := n.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
+		log.Fatal(err)
 	}
 }
 
