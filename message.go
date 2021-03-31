@@ -2,7 +2,6 @@ package raft
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -48,7 +47,6 @@ func (r *RequestVoteMsg) Send(server_name string, term int64, cId string, lastLo
 			LastLogIndex: lastLogIdx,
 			LastLogTerm:  lastLogTerm,
 			CandidateId:  cId})
-	fmt.Println(err)
 	if err != nil {
 		log.Fatalf("Error when sending requestVote: %v", err)
 	}

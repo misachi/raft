@@ -1,11 +1,15 @@
 package raft
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
 	"os"
+	"time"
+
+	pb "github.com/misachi/raft/protos/requestvote"
 )
 
 const (
@@ -119,22 +123,34 @@ func (n *Node) setName(name string) {
 func (n *Node) SendRequestVote() {
 	requestVoteMsg := RequestVoteMsg{}
 	totalVote := 0
+	voteResponseChan := make(chan *pb.RequestVoteResponse)
 	n.CurrentTerm++ /* Increment term by 1 */
 	totalVote++     /* Vote for myself */
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	for _, srv_node := range n.Nodes {
-		vote_response := requestVoteMsg.Send(srv_node, n.CurrentTerm, n.Name, 0, 0)
+		go func(ctx context.Context, srv string, currentTerm int64, name string) {
+			voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0)
+		}(ctx, srv_node, n.CurrentTerm, n.Name)
+	}
 
-		fmt.Println(vote_response)
-		new_term := vote_response.GetTerm()
-		if new_term >= n.CurrentTerm && !vote_response.GetVoteGranted() {
-			n.CurrentTerm = new_term
-			n.State = Follower
-			break
-		}
-		totalVote++
-		if totalVote >= n.avgNodeCount() {
-			n.State = Leader
+	for range n.Nodes {
+		select {
+		case <-ctx.Done():
+			fmt.Println(ctx.Err())
 			return
+		case vote_response := <-voteResponseChan:
+			new_term := vote_response.GetTerm()
+			if new_term >= n.CurrentTerm && !vote_response.GetVoteGranted() {
+				n.CurrentTerm = new_term
+				n.State = Follower
+				return
+			}
+			totalVote++
+			if totalVote >= n.avgNodeCount() {
+				n.State = Leader
+				return
+			}
 		}
 	}
 }
