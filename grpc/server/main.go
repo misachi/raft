@@ -36,7 +36,7 @@ func main() {
 		log.Fatalf("Error starting up server: %v", err)
 	}
 	buf := make([]byte, int(unsafe.Sizeof(raft.Node{})))
-	node := raft.ReadNodeFile(buf, os.O_CREATE|os.O_WRONLY)
+	node := raft.ReadNodeFile(buf, os.O_CREATE|os.O_RDONLY)
 	if node == nil {
 		node = raft.NewNode(serverName, nodes)
 	}

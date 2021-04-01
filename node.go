@@ -78,8 +78,10 @@ func ReadNodeFile(buf []byte, flag int) *Node {
 		total += nRead
 	}
 	node := Node{}
-	if err := json.Unmarshal(buf[:total], &node); err != nil {
-		log.Fatal(err)
+	if total > 0 {
+		if err := json.Unmarshal(buf[:total], &node); err != nil {
+			log.Fatal(err)
+		}
 	}
 	return &node
 }
