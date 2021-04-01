@@ -35,12 +35,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error starting up server: %v", err)
 	}
+
 	buf := make([]byte, int(unsafe.Sizeof(raft.Node{})))
 	node := raft.ReadNodeFile(buf, os.O_CREATE|os.O_RDONLY)
 	if node == nil {
 		node = raft.NewNode(serverName, nodes)
 	}
-	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
+
+	if err := node.PersistToDisk(0644, os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}
 	grpcServer := grpc.NewServer()

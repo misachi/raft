@@ -20,7 +20,7 @@ const (
 
 var (
 	CurrentNode *Node
-	nodeDetail  = fmt.Sprintf("%s/.config/node-detail.json", os.Getenv("HOME"))
+	NodeDetail  = fmt.Sprintf("%s/.config/node-detail.json", os.Getenv("HOME"))
 )
 
 func getArrayElement(slice []string, element string) (int, error) {
@@ -63,7 +63,7 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 }
 
 func ReadNodeFile(buf []byte, flag int) *Node {
-	store := NewDiskStore(nodeDetail)
+	store := NewDiskStore(NodeDetail)
 	fileObj, err := store.CreateFile(0644, flag)
 	if err != nil {
 		log.Fatal(err)
@@ -77,13 +77,15 @@ func ReadNodeFile(buf []byte, flag int) *Node {
 		}
 		total += nRead
 	}
-	node := Node{}
+
 	if total > 0 {
+		var node Node
 		if err := json.Unmarshal(buf[:total], &node); err != nil {
 			log.Fatal(err)
 		}
+		return &node
 	}
-	return &node
+	return nil
 }
 
 func (n *Node) GetNodeFromFile(buf []byte, flag int) *Node {
@@ -95,7 +97,7 @@ func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {
 	if err != nil {
 		return fmt.Errorf("unable to serialize to Json: %v", err)
 	}
-	store := NewDiskStore(nodeDetail)
+	store := NewDiskStore(NodeDetail)
 	fileObj, err := store.CreateFile(perm, flag)
 	if err != nil {
 		log.Fatal(err)
