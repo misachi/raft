@@ -33,7 +33,7 @@ func getArrayElement(slice []string, element string) (int, error) {
 }
 
 func removeArrayElement(slice []string, idx int) []string {
-	slice = append(slice[:idx], slice[idx:]...)
+	slice = append(slice[:idx], slice[idx+1:]...)
 	return slice
 }
 
@@ -62,9 +62,9 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 	}
 }
 
-func ReadNodeFile(buf []byte) *Node {
+func ReadNodeFile(buf []byte, flag int) *Node {
 	store := NewDiskStore(nodeDetail)
-	fileObj, err := store.CreateFile(0644, os.O_RDONLY)
+	fileObj, err := store.CreateFile(0644, flag)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -84,8 +84,8 @@ func ReadNodeFile(buf []byte) *Node {
 	return &node
 }
 
-func (n *Node) GetNodeFromFile(buf []byte) *Node {
-	return ReadNodeFile(buf)
+func (n *Node) GetNodeFromFile(buf []byte, flag int) *Node {
+	return ReadNodeFile(buf, flag)
 }
 
 func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {

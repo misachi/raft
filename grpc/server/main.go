@@ -19,7 +19,7 @@ type RequestVoteServer struct {
 
 func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteDetail) (*pb.RequestVoteResponse, error) {
 	buf := make([]byte, int(unsafe.Sizeof(raft.Node{})))
-	node := raft.ReadNodeFile(buf)
+	node := raft.ReadNodeFile(buf, os.O_RDONLY)
 	term, voted := node.VoteForClient(detail.CandidateId, detail.Term, detail.LastLogIndex, detail.LastLogTerm)
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
@@ -35,7 +35,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error starting up server: %v", err)
 	}
-	node := raft.NewNode(serverName, nodes)
+	buf := make([]byte, int(unsafe.Sizeof(raft.Node{})))
+	node := raft.ReadNodeFile(buf, os.O_CREATE|os.O_WRONLY)
+	if node == nil {
+		node = raft.NewNode(serverName, nodes)
+	}
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}
