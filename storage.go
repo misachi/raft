@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 var (
@@ -22,7 +21,6 @@ type Store interface {
 }
 
 type DiskStore struct {
-	mu *sync.Mutex
 	StoreDir string
 	FileName string
 }
@@ -83,8 +81,6 @@ func (d *DiskStore) ReadFile(buf []byte, file *os.File) (int, error) {
 }
 
 func (d *DiskStore) WriteFile(buf []byte, file *os.File) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	_, err := file.Write(buf)
 	if err != nil {
 		log.Fatalf("Write error: %v", err)

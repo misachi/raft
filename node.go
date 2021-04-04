@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"unsafe"
 
 	pb "github.com/misachi/raft/protos/requestvote"
 )
@@ -164,6 +165,9 @@ func (n *Node) SendRequestVote() {
 		}
 	}
 done:
+	if err := os.Truncate(NodeDetail, int64(unsafe.Sizeof(n))); err != nil {
+		log.Fatalf("Unable to resize file: %v", err)
+	}
 	if err := n.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}
