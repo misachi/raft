@@ -155,16 +155,15 @@ func (n *Node) SendRequestVote() {
 			if new_term >= n.CurrentTerm && !vote_response.GetVoteGranted() {
 				n.CurrentTerm = new_term
 				n.State = Follower
-				goto done
+				break
 			}
 			totalVote++
 			if totalVote >= n.avgNodeCount() {
 				n.State = Leader
-				goto done
 			}
 		}
 	}
-done:
+
 	if err := os.Truncate(NodeDetail, int64(unsafe.Sizeof(n))); err != nil {
 		log.Fatalf("Unable to resize file: %v", err)
 	}
