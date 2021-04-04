@@ -136,21 +136,21 @@ func (n *Node) SendRequestVote() {
 		go func(ctx context.Context, srv string, currentTerm int64, name string) {
 			select {
 			case <-ctx.Done():
-				fmt.Println(ctx.Err())
+				log.Println(ctx.Err())
 				return
 			case voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0):
-				fmt.Printf("Node: %s has voted\n", srv)
 			}
 		}(ctx, srv_node, n.CurrentTerm, n.Name)
 	}
 
-	for range n.Nodes {
+	for _, node := range n.Nodes {
 		select {
 		case <-ctx.Done():
-			fmt.Println(ctx.Err())
+			log.Println(ctx.Err())
 			return
 		case vote_response := <-voteResponseChan:
 			new_term := vote_response.GetTerm()
+			log.Printf("%s has voted %v with term %d\n", node, vote_response.GetVoteGranted(), new_term)
 			if new_term >= n.CurrentTerm && !vote_response.GetVoteGranted() {
 				n.CurrentTerm = new_term
 				n.State = Follower
