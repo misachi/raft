@@ -134,7 +134,13 @@ func (n *Node) SendRequestVote() {
 	defer cancel()
 	for _, srv_node := range n.Nodes {
 		go func(ctx context.Context, srv string, currentTerm int64, name string) {
-			voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0)
+			select {
+			case <-ctx.Done():
+				fmt.Println(ctx.Err())
+				return
+			case voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0):
+				fmt.Printf("Node: %s has voted", srv)
+			}
 		}(ctx, srv_node, n.CurrentTerm, n.Name)
 	}
 
