@@ -139,7 +139,7 @@ func (n *Node) SendRequestVote() {
 				fmt.Println(ctx.Err())
 				return
 			case voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0):
-				fmt.Printf("Node: %s has voted", srv)
+				fmt.Printf("Node: %s has voted\n", srv)
 			}
 		}(ctx, srv_node, n.CurrentTerm, n.Name)
 	}
