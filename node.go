@@ -39,15 +39,14 @@ func removeArrayElement(slice []string, idx int) []string {
 }
 
 type Node struct {
-	CurrentTerm  int64    `json:"current_term,omitempty"` /* Store the term we're in atm */
-	VotedFor     string   `json:"voted_for,omitempty"`    /* CandidateId that received vote */
-	State        string   `json:"state,omitempty"`        /* Current state of the node */
-	Name         string   `json:"name,omitempty"`         /* Node name */
-	CommitIndex  int      `json:"commit_index,omitempty"` /* Index of highest log entry known to be committed */
-	LastApplied  int      `json:"last_applied,omitempty"` /* Index of highest log entry applied to state machine */
-	Nodes        []string `json:"nodes,omitempty"`        /* Nodes in cluster */
-	LogEntryPath string   `json:"log_entry,omitempty"`    /* Command Entries */
-	TimeOut      int      `json:"time_out,omitempty"`     /*  */
+	CurrentTerm int64    `json:"current_term,omitempty"` /* Store the term we're in atm */
+	VotedFor    string   `json:"voted_for,omitempty"`    /* CandidateId that received vote */
+	State       string   `json:"state,omitempty"`        /* Current state of the node */
+	Name        string   `json:"name,omitempty"`         /* Node name */
+	CommitIndex int      `json:"commit_index,omitempty"` /* Index of highest log entry known to be committed */
+	LastApplied int      `json:"last_applied,omitempty"` /* Index of highest log entry applied to state machine */
+	Nodes       []string `json:"nodes,omitempty"`        /* Nodes in cluster */
+	LogEntry    []Entry  `json:"log_entry,omitempty"`    /* Command Entries */
 }
 
 func NewNode(serverName string, clusterNodes []string) *Node {
@@ -115,7 +114,7 @@ func (n *Node) String() string {
 }
 
 func (n *Node) avgNodeCount() int {
-	return len(n.Nodes) / 2
+	return (len(n.Nodes) + 1) / 2
 }
 
 func (n *Node) setName(name string) {
@@ -125,14 +124,8 @@ func (n *Node) setName(name string) {
 	n.Name = name
 }
 
-func (n *Node) SendRequestVote() {
+func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan *pb.RequestVoteResponse, nodeName chan string) {
 	requestVoteMsg := RequestVoteMsg{}
-	totalVote := 0
-	voteResponseChan := make(chan *pb.RequestVoteResponse)
-	n.CurrentTerm++ /* Increment term by 1 */
-	totalVote++     /* Vote for myself */
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 	for _, srv_node := range n.Nodes {
 		go func(ctx context.Context, srv string, currentTerm int64, name string) {
 			select {
@@ -140,27 +133,40 @@ func (n *Node) SendRequestVote() {
 				log.Println(ctx.Err())
 				return
 			case voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0):
+				nodeName <- srv
 			}
 		}(ctx, srv_node, n.CurrentTerm, n.Name)
 	}
+}
 
-	for _, node := range n.Nodes {
-		select {
-		case <-ctx.Done():
-			log.Println(ctx.Err())
-			return
-		case vote_response := <-voteResponseChan:
-			new_term := vote_response.GetTerm()
-			log.Printf("%s has voted %v with term %d\n", node, vote_response.GetVoteGranted(), new_term)
-			if new_term >= n.CurrentTerm && !vote_response.GetVoteGranted() {
-				n.CurrentTerm = new_term
-				n.State = Follower
-				break
-			}
-			totalVote++
-			if totalVote >= n.avgNodeCount() {
-				n.State = Leader
-			}
+func (n *Node) SendRequestVote() {
+	totalVote, nodeCount := 0, n.avgNodeCount()
+	voteResponseChan := make(chan *pb.RequestVoteResponse)
+	nodeName := make(chan string)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	n.CurrentTerm++ /* Increment term by 1 */
+	totalVote++     /* Vote for myself */
+
+	getRequestVoteResponse(ctx, n, voteResponseChan, nodeName)
+
+	for range n.Nodes {
+		vote_response := <-voteResponseChan // block till we are ready to receive
+		granted := vote_response.GetVoteGranted()
+		new_term := vote_response.GetTerm()
+		log.Printf("%s voted %v in term %d\n", <-nodeName, granted, new_term)
+		if new_term >= n.CurrentTerm && !granted {
+			n.CurrentTerm = new_term
+			n.State = Follower
+			cancel() // Cleanup if a leader exists already
+			break
+		}
+		totalVote++
+		if totalVote >= nodeCount {
+			n.State = Leader
+			cancel() // Cleanup if we have majority votes
+			break
 		}
 	}
 
