@@ -1,18 +1,25 @@
 package raft
 
 import (
-	"log"
+	"errors"
 	"os"
 	"unsafe"
 )
 
-func GetBufferSize() int {
-	var bufSize = int(unsafe.Sizeof(Node{}))
-	fInfo, err := os.Stat(NodeDetail)
+func GetFileSize(fileName string) (int64, error) {
+	fInfo, err := os.Stat(fileName)
 	if err != nil {
-		log.Printf("File Stat error: %v\n", err)
+		return -1, errors.New(err.Error())
+	}
+	return fInfo.Size(), nil
+}
+
+func GetBufferSize() int {
+	var bufSize int
+	if fSize, _ := GetFileSize(NodeDetail); fSize > 0 {
+		bufSize = int(fSize)
 	} else {
-		bufSize = int(fInfo.Size())
+		bufSize = int(unsafe.Sizeof(Node{}))
 	}
 	return bufSize
 }

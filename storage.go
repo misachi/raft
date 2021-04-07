@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -38,11 +39,11 @@ func NewDiskStore(fileName string) *DiskStore {
 
 func (d *DiskStore) CreateFile(perm fs.FileMode, flag int) (*os.File, error) {
 	if d.StoreDir == "" && FileDir == "" {
-		return nil, fmt.Errorf("directory cannot be empty")
+		return nil, errors.New("directory cannot be empty")
 	}
 
 	if d.FileName == "" {
-		return nil, fmt.Errorf("filename cannot be empty")
+		return nil, errors.New("filename cannot be empty")
 	}
 
 	filePath := filepath.Join(d.StoreDir, d.FileName)
@@ -68,14 +69,14 @@ func (d *DiskStore) ReadFile(buf []byte, file *os.File) (int, error) {
 	nRead, err := file.Read(buf)
 	if err != nil {
 		if err == io.EOF {
-			fmt.Println("we have reached end of file")
+			log.Println("End of file")
 		} else {
-			log.Fatalf("Error when reading file: %v", err)
+			log.Fatalf("Error reading file: %v", err)
 		}
 	}
 
 	if nRead <= 0 {
-		return nRead, fmt.Errorf("file is empty")
+		return nRead, errors.New("file is empty")
 	}
 	return nRead, nil
 }

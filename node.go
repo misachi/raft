@@ -20,8 +20,9 @@ const (
 )
 
 var (
-	CurrentNode *Node
-	NodeDetail  = fmt.Sprintf("%s/.config/node-detail.json", os.Getenv("HOME"))
+	CurrentNode  *Node
+	NodeDetail   = fmt.Sprintf("%s/.config/node-detail.json", os.Getenv("HOME"))
+	EntryLogFile = fmt.Sprintf("%s/.config/entry_logs.json", os.Getenv("HOME"))
 )
 
 func getArrayElement(slice []string, element string) (int, error) {
@@ -115,13 +116,6 @@ func (n *Node) String() string {
 
 func (n *Node) avgNodeCount() int {
 	return (len(n.Nodes) + 1) / 2
-}
-
-func (n *Node) setName(name string) {
-	if name == "" {
-		panic("Node name cannot be empty")
-	}
-	n.Name = name
 }
 
 func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan *pb.RequestVoteResponse, nodeName chan string) {
