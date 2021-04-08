@@ -58,11 +58,17 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 		log.Fatal(err)
 	}
 	clusterNodes = removeArrayElement(clusterNodes, srvIndex)
-	return &Node{
+	node := Node{
 		State: Follower,
 		Name:  serverName,
 		Nodes: clusterNodes,
 	}
+	entry := []Entry{}
+	if err := ReadEntryLog(entry); err != nil {
+		log.Fatalf("Could not read entry log: %v", err)
+	}
+	node.LogEntry = entry
+	return &node
 }
 
 func (n *Node) ReadNodeFromFile(buf []byte, flag int) *Node {
@@ -120,6 +126,14 @@ func (n *Node) avgNodeCount() int {
 	return (len(n.Nodes) + 1) / 2
 }
 
+func (n *Node) TruncNodeFile(size int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if err := os.Truncate(NodeDetail, size); err != nil {
+		log.Fatalf("unable to resize file: %v", err)
+	}
+}
+
 func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan *pb.RequestVoteResponse, nodeName chan string) {
 	requestVoteMsg := RequestVoteMsg{}
 	for _, srv_node := range n.Nodes {
@@ -171,9 +185,7 @@ func (n *Node) SendRequestVote() {
 		}
 	}
 
-	if err := os.Truncate(NodeDetail, int64(unsafe.Sizeof(n))); err != nil {
-		log.Fatalf("Unable to resize file: %v", err)
-	}
+	n.TruncNodeFile(int64(unsafe.Sizeof(n)))
 	if err := n.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}

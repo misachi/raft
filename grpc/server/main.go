@@ -55,6 +55,14 @@ func main() {
 	if err := node.PersistToDisk(0644, os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}
+
+	store := raft.NewDiskStore(raft.EntryLogFile)
+	file, err := store.CreateFile(0644, os.O_CREATE);
+	if err != nil {
+		log.Fatalf("Unable to open/create entry-log file: %v", err)
+	}
+	file.Close()
+
 	grpcServer := grpc.NewServer()
 	pb.RegisterRequestVoteServer(grpcServer, &RequestVoteServer{})
 	grpcServer.Serve(lis)
