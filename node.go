@@ -41,7 +41,7 @@ func removeArrayElement(slice []string, idx int) []string {
 }
 
 type Node struct {
-	mu          *sync.Mutex
+	mu          sync.Mutex
 	CurrentTerm int64    `json:"current_term,omitempty"` /* Store the term we're in atm */
 	VotedFor    string   `json:"voted_for,omitempty"`    /* CandidateId that received vote */
 	State       string   `json:"state,omitempty"`        /* Current state of the node */
@@ -123,15 +123,21 @@ func (n *Node) avgNodeCount() int {
 func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan *pb.RequestVoteResponse, nodeName chan string) {
 	requestVoteMsg := RequestVoteMsg{}
 	for _, srv_node := range n.Nodes {
-		go func(ctx context.Context, srv string, currentTerm int64, name string) {
-			select {
-			case <-ctx.Done():
-				log.Println(ctx.Err())
-				return
-			case voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0):
-				nodeName <- srv
-			}
-		}(ctx, srv_node, n.CurrentTerm, n.Name)
+		select {
+		case <-ctx.Done():
+			log.Println(ctx.Err())
+			return
+		default:
+			go func(ctx context.Context, srv string, currentTerm int64, name string) {
+				select {
+				case <-ctx.Done():
+					log.Println(ctx.Err())
+					return
+				case voteResponseChan <- requestVoteMsg.Send(srv, currentTerm, n.Name, 0, 0):
+					nodeName <- srv
+				}
+			}(ctx, srv_node, n.CurrentTerm, n.Name)
+		}
 	}
 }
 
@@ -145,10 +151,9 @@ func (n *Node) SendRequestVote() {
 	n.CurrentTerm++ /* Increment term by 1 */
 	totalVote++     /* Vote for myself */
 
-	getRequestVoteResponse(ctx, n, voteResponseChan, nodeName)
+	go getRequestVoteResponse(ctx, n, voteResponseChan, nodeName)
 
-	for range n.Nodes {
-		vote_response := <-voteResponseChan // block till we are ready to receive
+	for vote_response := range voteResponseChan {
 		granted := vote_response.GetVoteGranted()
 		new_term := vote_response.GetTerm()
 		log.Printf("%s voted %v in term %d\n", <-nodeName, granted, new_term)

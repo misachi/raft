@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const port = 4009
+
 type RequestVoteServer struct {
 	pb.UnimplementedRequestVoteServer
 }
@@ -20,6 +22,7 @@ func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteD
 	buf := make([]byte, raft.GetBufferSize())
 	node := new(raft.Node)
 	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
+	log.Printf("Received requestVote from %s", detail.CandidateId)
 	term, voted := node.VoteForClient(detail.CandidateId, detail.Term, detail.LastLogIndex, detail.LastLogTerm)
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
@@ -31,6 +34,9 @@ func main() {
 	/* The addresses are for tests only */
 	serverName := fmt.Sprintf("172.24.0.2:%d", 4002)
 	nodes := []string{"172.24.0.3:4000"}
+
+	log.Println("Starting server...")
+	log.Printf("Listening on port %d\n", port)
 	lis, err := net.Listen("tcp", serverName)
 	if err != nil {
 		log.Fatalf("Error starting up server: %v", err)
@@ -40,7 +46,8 @@ func main() {
 
 	buf := make([]byte, bufSize)
 	node := new(raft.Node)
-	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
+	log.Println("Loading config file...")
+	node = node.ReadNodeFromFile(buf, os.O_CREATE|os.O_RDONLY)
 	if node == nil {
 		node = raft.NewNode(serverName, nodes)
 	}

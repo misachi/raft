@@ -62,17 +62,13 @@ func (d *DiskStore) ReadFile(buf []byte, file *os.File) (int, error) {
 	if file == nil {
 		newFile, err := d.CreateFile(0644, os.O_WRONLY|os.O_CREATE)
 		if file == nil {
-			log.Fatalf("Could not create file: %v", err)
+			return -1, fmt.Errorf("could not create file: %v", err)
 		}
 		file = newFile
 	}
 	nRead, err := file.Read(buf)
-	if err != nil {
-		if err == io.EOF {
-			log.Println("End of file")
-		} else {
-			log.Fatalf("Error reading file: %v", err)
-		}
+	if err != nil && err != io.EOF {
+		return -1, fmt.Errorf("error reading file: %v", err)
 	}
 
 	if nRead <= 0 {
@@ -84,7 +80,7 @@ func (d *DiskStore) ReadFile(buf []byte, file *os.File) (int, error) {
 func (d *DiskStore) WriteFile(buf []byte, file *os.File) error {
 	_, err := file.Write(buf)
 	if err != nil {
-		log.Fatalf("Write error: %v", err)
+		return fmt.Errorf("write error: %v", err)
 	}
 	return nil
 }

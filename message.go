@@ -30,7 +30,6 @@ func (r *RequestVoteMsg) getConnection(srv_name string) (context.Context, *grpc.
 }
 
 func (r *RequestVoteMsg) Send(server_name string, term int64, cId string, lastLogIdx int64, lastLogTerm int64) *pb.RequestVoteResponse {
-	// ctx, conn := r.getConnection((server_name))
 	conn, err := grpc.Dial(server_name, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Could not connect to remote server: %v", err)
