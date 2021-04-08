@@ -10,7 +10,9 @@ import (
 func main() {
 	/* Client test code */
 	buf := make([]byte, raft.GetBufferSize())
-	node := raft.ReadNodeFile(buf, os.O_RDONLY)
+	node := new(raft.Node)
+	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
+
 	if node == nil {
 		log.Fatal("The server is not running. Ensure the server is started.")
 	}

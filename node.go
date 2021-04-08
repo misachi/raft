@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -40,6 +41,7 @@ func removeArrayElement(slice []string, idx int) []string {
 }
 
 type Node struct {
+	mu          *sync.Mutex
 	CurrentTerm int64    `json:"current_term,omitempty"` /* Store the term we're in atm */
 	VotedFor    string   `json:"voted_for,omitempty"`    /* CandidateId that received vote */
 	State       string   `json:"state,omitempty"`        /* Current state of the node */
@@ -63,7 +65,7 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 	}
 }
 
-func ReadNodeFile(buf []byte, flag int) *Node {
+func readNodeFile(buf []byte, flag int) *Node {
 	store := NewDiskStore(NodeDetail)
 	fileObj, err := store.CreateFile(0644, flag)
 	if err != nil {
@@ -89,11 +91,15 @@ func ReadNodeFile(buf []byte, flag int) *Node {
 	return nil
 }
 
-func (n *Node) GetNodeFromFile(buf []byte, flag int) *Node {
-	return ReadNodeFile(buf, flag)
+func (n *Node) ReadNodeFromFile(buf []byte, flag int) *Node {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return readNodeFile(buf, flag)
 }
 
 func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	buf, err := json.Marshal(n)
 	if err != nil {
 		return fmt.Errorf("unable to serialize to Json: %v", err)

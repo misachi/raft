@@ -18,7 +18,8 @@ type RequestVoteServer struct {
 
 func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteDetail) (*pb.RequestVoteResponse, error) {
 	buf := make([]byte, raft.GetBufferSize())
-	node := raft.ReadNodeFile(buf, os.O_RDONLY)
+	node := new(raft.Node)
+	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
 	term, voted := node.VoteForClient(detail.CandidateId, detail.Term, detail.LastLogIndex, detail.LastLogTerm)
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
@@ -38,7 +39,8 @@ func main() {
 	var bufSize = raft.GetBufferSize()
 
 	buf := make([]byte, bufSize)
-	node := raft.ReadNodeFile(buf, os.O_CREATE|os.O_RDONLY)
+	node := new(raft.Node)
+	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
 	if node == nil {
 		node = raft.NewNode(serverName, nodes)
 	}
