@@ -65,7 +65,9 @@ func NewNode(serverName string, clusterNodes []string) *Node {
 	}
 }
 
-func readNodeFile(buf []byte, flag int) *Node {
+func (n *Node) ReadNodeFromFile(buf []byte, flag int) *Node {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	store := NewDiskStore(NodeDetail)
 	fileObj, err := store.CreateFile(0644, flag)
 	if err != nil {
@@ -89,12 +91,6 @@ func readNodeFile(buf []byte, flag int) *Node {
 		return &node
 	}
 	return nil
-}
-
-func (n *Node) ReadNodeFromFile(buf []byte, flag int) *Node {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return readNodeFile(buf, flag)
 }
 
 func (n *Node) PersistToDisk(perm fs.FileMode, flag int) error {
