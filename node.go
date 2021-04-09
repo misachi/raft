@@ -26,20 +26,6 @@ var (
 	EntryLogFile = fmt.Sprintf("%s/.config/entry_logs.json", os.Getenv("HOME"))
 )
 
-func getArrayElement(slice []string, element string) (int, error) {
-	for idx, name := range slice {
-		if name == element {
-			return idx, nil
-		}
-	}
-	return -1, fmt.Errorf("element not found")
-}
-
-func removeArrayElement(slice []string, idx int) []string {
-	slice = append(slice[:idx], slice[idx+1:]...)
-	return slice
-}
-
 type Node struct {
 	mu          sync.Mutex
 	CurrentTerm int64    `json:"current_term,omitempty"` /* Store the term we're in atm */
@@ -122,8 +108,8 @@ func (n *Node) String() string {
 	return fmt.Sprintf("Name: %s State: %s Term: %d", n.Name, n.State, n.CurrentTerm)
 }
 
-func (n *Node) avgNodeCount() int {
-	return (len(n.Nodes) + 1) / 2
+func avgNodeCount(nList []string) int {
+	return (len(nList) + 1) / 2
 }
 
 func (n *Node) TruncNodeFile(size int64) {
@@ -156,7 +142,7 @@ func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan 
 }
 
 func (n *Node) SendRequestVote() {
-	totalVote, nodeCount := 0, n.avgNodeCount()
+	totalVote, nodeCount := 0, avgNodeCount(n.Nodes)
 	voteResponseChan := make(chan *pb.RequestVoteResponse)
 	nodeName := make(chan string)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -177,7 +163,9 @@ func (n *Node) SendRequestVote() {
 			cancel() // Cleanup if a leader exists already
 			break
 		}
-		totalVote++
+		if granted {
+			totalVote++
+		}
 		if totalVote >= nodeCount {
 			n.State = Leader
 			cancel() // Cleanup if we have majority votes

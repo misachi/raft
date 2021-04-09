@@ -99,3 +99,89 @@ var RequestVote_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "request_vote.proto",
 }
+
+// AppendEntryClient is the client API for AppendEntry service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type AppendEntryClient interface {
+	AddEntry(ctx context.Context, in *AppendEntryRequestDetail, opts ...grpc.CallOption) (*AppendEntryResponse, error)
+}
+
+type appendEntryClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAppendEntryClient(cc grpc.ClientConnInterface) AppendEntryClient {
+	return &appendEntryClient{cc}
+}
+
+func (c *appendEntryClient) AddEntry(ctx context.Context, in *AppendEntryRequestDetail, opts ...grpc.CallOption) (*AppendEntryResponse, error) {
+	out := new(AppendEntryResponse)
+	err := c.cc.Invoke(ctx, "/AppendEntry/AddEntry", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AppendEntryServer is the server API for AppendEntry service.
+// All implementations must embed UnimplementedAppendEntryServer
+// for forward compatibility
+type AppendEntryServer interface {
+	AddEntry(context.Context, *AppendEntryRequestDetail) (*AppendEntryResponse, error)
+	mustEmbedUnimplementedAppendEntryServer()
+}
+
+// UnimplementedAppendEntryServer must be embedded to have forward compatible implementations.
+type UnimplementedAppendEntryServer struct {
+}
+
+func (UnimplementedAppendEntryServer) AddEntry(context.Context, *AppendEntryRequestDetail) (*AppendEntryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddEntry not implemented")
+}
+func (UnimplementedAppendEntryServer) mustEmbedUnimplementedAppendEntryServer() {}
+
+// UnsafeAppendEntryServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AppendEntryServer will
+// result in compilation errors.
+type UnsafeAppendEntryServer interface {
+	mustEmbedUnimplementedAppendEntryServer()
+}
+
+func RegisterAppendEntryServer(s grpc.ServiceRegistrar, srv AppendEntryServer) {
+	s.RegisterService(&AppendEntry_ServiceDesc, srv)
+}
+
+func _AppendEntry_AddEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppendEntryRequestDetail)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppendEntryServer).AddEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/AppendEntry/AddEntry",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppendEntryServer).AddEntry(ctx, req.(*AppendEntryRequestDetail))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AppendEntry_ServiceDesc is the grpc.ServiceDesc for AppendEntry service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AppendEntry_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "AppendEntry",
+	HandlerType: (*AppendEntryServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AddEntry",
+			Handler:    _AppendEntry_AddEntry_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "request_vote.proto",
+}

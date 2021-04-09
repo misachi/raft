@@ -39,5 +39,5 @@ message AppendEntryRequestDetail {
 
 message AppendEntryResponse {
     int64 term = 1;
-    string success = 2;
+    bool success = 2;
 }

@@ -12,12 +12,13 @@ import (
 
 type Message interface {
 	Send()
-	Receive()
 }
 
 type RequestVoteMsg struct{}
 
-func (r *RequestVoteMsg) getConnection(srv_name string) (context.Context, *grpc.ClientConn) {
+type AppendRequestMsg struct{}
+
+func getConnection(srv_name string) (context.Context, *grpc.ClientConn) {
 	conn, err := grpc.Dial(srv_name, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Could not connect to remote server: %v", err)
@@ -52,4 +53,20 @@ func (r *RequestVoteMsg) Send(server_name string, term int64, cId string, lastLo
 	return response
 }
 
-func (r *RequestVoteMsg) Receive() {}
+func (r *AppendRequestMsg) Send(server_name string, req *pb.AppendEntryRequestDetail) *pb.AppendEntryResponse {
+	conn, err := grpc.Dial(server_name, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("Could not connect to remote server: %v", err)
+	}
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client := pb.NewAppendEntryClient(conn)
+	response, err := client.AddEntry(ctx, req)
+	if err != nil {
+		log.Fatalf("Error when sending entries: %v", err)
+	}
+	return response
+}

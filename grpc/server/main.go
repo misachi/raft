@@ -13,6 +13,7 @@ import (
 )
 
 const port = 4009
+var entryServer chan bool
 
 type RequestVoteServer struct {
 	pb.UnimplementedRequestVoteServer
