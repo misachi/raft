@@ -38,3 +38,9 @@ func GetBufferSize() int {
 	}
 	return bufSize
 }
+
+func NodeFromDisk() *Node {
+	buf := make([]byte, GetBufferSize())
+	node := new(Node)
+	return node.ReadNodeFromFile(buf, os.O_RDONLY)
+}

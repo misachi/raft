@@ -35,7 +35,7 @@ func NewEntry(id int, term int64, command []byte) *Entry {
 
 func ReadEntryLog(entries []Entry) error {
 	fileSize, err := GetFileSize(EntryLogFile)
-	store := DiskStore{}
+	store := NewDiskStore(EntryLogFile)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
@@ -45,10 +45,11 @@ func ReadEntryLog(entries []Entry) error {
 		return err
 	}
 	defer file.Close()
-	if _, err := store.ReadFile(buf, file); err != nil {
+	nRead, err := store.ReadFile(buf, file)
+	if err != nil && nRead > 0 {
 		return err
 	}
-	if err := json.Unmarshal(buf, &entries); err != nil {
+	if err := json.Unmarshal(buf, &entries); err != nil && nRead > 0 {
 		return err
 	}
 	return nil
@@ -130,11 +131,10 @@ func (a *AppendLog) SendAppendEntryLog() {
 	}
 
 	for appendResponse := range appendEntryResp {
-		granted := appendResponse.GetSuccess()
-		if granted {
+		if appendResponse.GetSuccess() {
 			totalVote++
 			if totalVote >= avgSrvCount {
-				cancel()
+				a.AddEntryToNode(request)
 				break
 			}
 		} else {
@@ -150,6 +150,18 @@ func (a *AppendLog) SendAppendEntryLog() {
 			}
 		}
 	}
+}
+
+func (a *AppendLog) AddEntryToNode(req *pb.AppendEntryRequestDetail) {
+	reqEntries := make([]Entry, len(req.GetEntry()))
+	for idx, entry := range req.GetEntry() {
+		reqEntries[idx] = Entry{
+			Id:      int(entry.GetId()),
+			Term:    entry.GetTerm(),
+			Command: entry.GetCommand(),
+		}
+	}
+	a.SrvNode.LogEntry = append(a.SrvNode.LogEntry, reqEntries...)
 }
 
 func (a *AppendLog) AppendEntryLog(req *pb.AppendEntryRequestDetail) pb.AppendEntryResponse {
@@ -170,15 +182,7 @@ func (a *AppendLog) AppendEntryLog(req *pb.AppendEntryRequestDetail) pb.AppendEn
 	}
 
 	a.SrvNode.CurrentTerm = req.GetTerm()
-	reqEntries := make([]Entry, len(req.GetEntry()))
-	for idx, entry := range req.GetEntry() {
-		reqEntries[idx] = Entry{
-			Id:      int(entry.GetId()),
-			Term:    entry.GetTerm(),
-			Command: entry.GetCommand(),
-		}
-	}
-	a.SrvNode.LogEntry = append(a.SrvNode.LogEntry, reqEntries...)
+	a.AddEntryToNode(req)
 
 	a.SrvNode.TruncNodeFile(int64(unsafe.Sizeof(a.SrvNode)))
 	if err := a.SrvNode.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {

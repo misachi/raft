@@ -120,6 +120,10 @@ func (n *Node) TruncNodeFile(size int64) {
 	}
 }
 
+func (n *Node) RefreshFromDisk() *Node {
+	return NodeFromDisk()
+}
+
 func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan *pb.RequestVoteResponse, nodeName chan string) {
 	requestVoteMsg := RequestVoteMsg{}
 	for _, srv_node := range n.Nodes {
@@ -142,6 +146,10 @@ func getRequestVoteResponse(ctx context.Context, n *Node, voteResponseChan chan 
 }
 
 func (n *Node) SendRequestVote() {
+	if n.State != Candidate {
+		log.Printf("%s Only Candidate nodes can send RequestVote\n", n.Name)
+		return
+	}
 	totalVote, nodeCount := 0, avgNodeCount(n.Nodes)
 	voteResponseChan := make(chan *pb.RequestVoteResponse)
 	nodeName := make(chan string)
@@ -167,6 +175,7 @@ func (n *Node) SendRequestVote() {
 			totalVote++
 		}
 		if totalVote >= nodeCount {
+			log.Printf("%s won Election", n.Name)
 			n.State = Leader
 			cancel() // Cleanup if we have majority votes
 			break

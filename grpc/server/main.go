@@ -6,29 +6,52 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"github.com/misachi/raft"
 	pb "github.com/misachi/raft/protos/requestvote"
 	"google.golang.org/grpc"
 )
 
-const port = 4009
-var entryServer chan bool
+const (
+	port       = 4009
+	minTimeout = 250
+	maxTimeout = 300
+)
+
+var (
+	requestVoteCh chan bool
+	appendEntryCh chan bool
+)
 
 type RequestVoteServer struct {
 	pb.UnimplementedRequestVoteServer
 }
 
 func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteDetail) (*pb.RequestVoteResponse, error) {
-	buf := make([]byte, raft.GetBufferSize())
-	node := new(raft.Node)
-	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
-	log.Printf("Received requestVote from %s", detail.CandidateId)
-	term, voted := node.VoteForClient(detail.CandidateId, detail.Term, detail.LastLogIndex, detail.LastLogTerm)
+	requestVoteCh <- true
+	node := raft.NodeFromDisk()
+	log.Printf("Received requestVote request from %s", detail.GetCandidateId())
+	term, voted := node.VoteForClient(detail.GetCandidateId(), detail.GetTerm(), detail.GetLastLogIndex(), detail.GetLastLogTerm())
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}
 	return &pb.RequestVoteResponse{Term: term, VoteGranted: voted}, nil
+}
+
+type AppendEntryServer struct {
+	pb.UnimplementedAppendEntryServer
+}
+
+func (r *AppendEntryServer) AddEntry(ctx context.Context, req *pb.AppendEntryRequestDetail) (*pb.AppendEntryResponse, error) {
+	appendEntryCh <- true
+	buf := make([]byte, raft.GetBufferSize())
+	node := new(raft.Node)
+	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
+	log.Printf("Received appendEntry request from %s", req.GetLeaderId())
+	appendLog := raft.NewAppendLog(node)
+	response := appendLog.AppendEntryLog(req)
+	return &response, nil
 }
 
 func main() {
@@ -58,11 +81,35 @@ func main() {
 	}
 
 	store := raft.NewDiskStore(raft.EntryLogFile)
-	file, err := store.CreateFile(0644, os.O_CREATE);
+	file, err := store.CreateFile(0644, os.O_CREATE)
 	if err != nil {
 		log.Fatalf("Unable to open/create entry-log file: %v", err)
 	}
 	file.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func(c context.Context, name string) {
+		backoff := raft.NewExponentialInterval(minTimeout, maxTimeout, 0)
+		for {
+			select {
+			case <-c.Done():
+				log.Printf("Server context cancelled: %v", c.Err())
+				return
+			case <-requestVoteCh:
+				log.Printf("%s Received RequestVote", name)
+			case <-appendEntryCh:
+				log.Printf("%s Received appendEntry request", name)
+			case <-time.After(backoff.Next() * time.Millisecond):
+				/* If we time out waiting for AppendEntry, we change to Candidate and send RequestVote to everyone */
+				node = raft.NodeFromDisk()
+				if node.State != raft.Leader {
+					node.State = raft.Candidate
+					node.SendRequestVote()
+				}
+			}
+		}
+	}(ctx, node.Name)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterRequestVoteServer(grpcServer, &RequestVoteServer{})
