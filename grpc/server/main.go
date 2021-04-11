@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	requestVoteCh chan bool
-	appendEntryCh chan bool
+	requestVoteCh = make(chan bool, 1)
+	appendEntryCh = make(chan bool, 1)
 )
 
 type RequestVoteServer struct {
@@ -29,13 +29,13 @@ type RequestVoteServer struct {
 }
 
 func (r *RequestVoteServer) GetVote(ctx context.Context, detail *pb.RequestVoteDetail) (*pb.RequestVoteResponse, error) {
-	requestVoteCh <- true
 	node := raft.NodeFromDisk()
-	log.Printf("Received requestVote request from %s", detail.GetCandidateId())
+	log.Printf("Received requestVote from %s", detail.GetCandidateId())
 	term, voted := node.VoteForClient(detail.GetCandidateId(), detail.GetTerm(), detail.GetLastLogIndex(), detail.GetLastLogTerm())
 	if err := node.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
 		log.Fatal(err)
 	}
+	requestVoteCh <- true
 	return &pb.RequestVoteResponse{Term: term, VoteGranted: voted}, nil
 }
 
@@ -44,13 +44,13 @@ type AppendEntryServer struct {
 }
 
 func (r *AppendEntryServer) AddEntry(ctx context.Context, req *pb.AppendEntryRequestDetail) (*pb.AppendEntryResponse, error) {
-	appendEntryCh <- true
 	buf := make([]byte, raft.GetBufferSize())
 	node := new(raft.Node)
 	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
-	log.Printf("Received appendEntry request from %s", req.GetLeaderId())
+	log.Printf("Received appendEntry from %s", req.GetLeaderId())
 	appendLog := raft.NewAppendLog(node)
 	response := appendLog.AppendEntryLog(req)
+	appendEntryCh <- true
 	return &response, nil
 }
 
@@ -89,7 +89,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func(c context.Context, name string) {
+	go func(c context.Context, n *raft.Node) {
 		backoff := raft.NewExponentialInterval(minTimeout, maxTimeout, 0)
 		for {
 			select {
@@ -97,19 +97,18 @@ func main() {
 				log.Printf("Server context cancelled: %v", c.Err())
 				return
 			case <-requestVoteCh:
-				log.Printf("%s Received RequestVote", name)
+				log.Printf("%s Received RequestVote", n.Name)
 			case <-appendEntryCh:
-				log.Printf("%s Received appendEntry request", name)
+				log.Printf("%s Received appendEntry request", n.Name)
 			case <-time.After(backoff.Next() * time.Millisecond):
 				/* If we time out waiting for AppendEntry, we change to Candidate and send RequestVote to everyone */
-				node = raft.NodeFromDisk()
-				if node.State != raft.Leader {
-					node.State = raft.Candidate
-					node.SendRequestVote()
+				if n.State != raft.Leader {
+					n.State = raft.Candidate
+					n.SendRequestVote()
 				}
 			}
 		}
-	}(ctx, node.Name)
+	}(ctx, node)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterRequestVoteServer(grpcServer, &RequestVoteServer{})
