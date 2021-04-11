@@ -2,7 +2,10 @@
 
 package raft
 
-import "time"
+import (
+	"math/rand"
+	"time"
+)
 
 type Exponential struct {
 	minInterval float64
@@ -12,6 +15,10 @@ type Exponential struct {
 }
 
 var defaultMultiplier = 1.5
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func NewExponentialInterval(optMin, optMax, mult float64) *Exponential {
 	if optMin > optMax {
@@ -44,7 +51,11 @@ func (e *Exponential) Next() time.Duration {
 	if next < e.minInterval {
 		next = e.minInterval
 	}
-
+	diff := next - e.minInterval
+	if diff <= 0 {
+		diff = e.maxInterval - e.minInterval
+	}
+	next = float64(rand.Intn(int(diff)) + int(e.minInterval))
 	e.current = next
 	return time.Duration(next)
 
