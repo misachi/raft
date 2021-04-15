@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -21,7 +22,7 @@ const (
 
 var (
 	requestVoteCh = make(chan bool, 1)
-	appendEntryCh = make(chan bool, 1)
+	appendEntryCh = make(chan *pb.AppendEntryRequestDetail, 1)
 )
 
 type RequestVoteServer struct {
@@ -49,9 +50,12 @@ func (r *AppendEntryServer) AddEntry(ctx context.Context, req *pb.AppendEntryReq
 	node = node.ReadNodeFromFile(buf, os.O_RDONLY)
 	log.Printf("Received appendEntry from %s", req.GetLeaderId())
 	appendLog := raft.NewAppendLog(node)
-	response := appendLog.AppendEntryLog(req)
-	appendEntryCh <- true
-	return &response, nil
+	response, err := appendLog.AppendEntryLog(req)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+	appendEntryCh <- req
+	return response, nil
 }
 
 func main() {
@@ -98,8 +102,16 @@ func main() {
 				return
 			case <-requestVoteCh:
 				log.Printf("%s Received RequestVote", n.Name)
-			case <-appendEntryCh:
+			case req := <-appendEntryCh:
 				log.Printf("%s Received appendEntry request", n.Name)
+				if req.Term >= n.CurrentTerm {
+					n.CurrentTerm = req.Term
+					n.State = raft.Follower
+				} else {
+					if n.State != raft.Leader {
+						n.State = raft.Candidate
+					}
+				}
 			case <-time.After(backoff.Next() * time.Millisecond):
 				/* If we time out waiting for AppendEntry, we change to Candidate and send RequestVote to everyone */
 				if n.State != raft.Leader {

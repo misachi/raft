@@ -177,6 +177,8 @@ func (n *Node) SendRequestVote() {
 		if totalVote >= nodeCount {
 			log.Printf("%s won Election", n.Name)
 			n.State = Leader
+			appendLog := NewAppendLog(n)
+			appendLog.SendHeartBeat()
 			cancel() // Cleanup if we have majority votes
 			break
 		}

@@ -3,6 +3,7 @@ package raft
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -80,11 +81,14 @@ func WriteEntryLog(entry Entry) error {
 
 type AppendLog struct {
 	SrvNode   *Node
-	LastEntry Entry
+	LastEntry *Entry
 }
 
-func lastEntry(node *Node) Entry {
-	return node.LogEntry[len(node.LogEntry)-1]
+func lastEntry(node *Node) *Entry {
+	if eSize := len(node.LogEntry); eSize >= 1 {
+		return &node.LogEntry[eSize-1]
+	}
+	return &Entry{}
 }
 
 func NewAppendLog(node *Node) *AppendLog {
@@ -110,6 +114,31 @@ func (a *AppendLog) buildRequest() *pb.AppendEntryRequestDetail {
 	}
 }
 
+func (a *AppendLog) SendHeartBeat() {
+	request := &pb.AppendEntryRequestDetail{
+		Term:         a.SrvNode.CurrentTerm,
+		PrevLogIndex: int64(a.LastEntry.Id),
+		PrevLogTerm:  a.LastEntry.Term,
+		LeaderId:     a.SrvNode.Name,
+		Entry:        []*pb.AppendEntryRequestDetail_Entry{},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout*time.Millisecond)
+	defer cancel()
+
+	appReqMsg := AppendRequestMsg{}
+	for _, srv_name := range a.SrvNode.Nodes {
+		go func(c context.Context, srv string, req *pb.AppendEntryRequestDetail) {
+			select {
+			case <-c.Done():
+				log.Printf("%s has been interrupted: %s", srv, c.Err().Error())
+				return
+			default:
+			}
+			appReqMsg.Send(srv, req)
+		}(ctx, srv_name, request)
+	}
+}
+
 func (a *AppendLog) SendAppendEntryLog() {
 	appendEntryResp := make(chan *pb.AppendEntryResponse)
 	totalVote, avgSrvCount := 0, avgNodeCount(a.SrvNode.Nodes)
@@ -125,28 +154,29 @@ func (a *AppendLog) SendAppendEntryLog() {
 				log.Printf("%s has been interrupted: %s", srv, c.Err().Error())
 				return
 			case appendEntryResp <- appReqMsg.Send(srv, req):
-			default:
 			}
 		}(ctx, srv_name, request)
 	}
 
 	for appendResponse := range appendEntryResp {
-		if appendResponse.GetSuccess() {
-			totalVote++
-			if totalVote >= avgSrvCount {
-				a.AddEntryToNode(request)
-				break
-			}
-		} else {
-			term := appendResponse.GetTerm()
-			if term >= a.SrvNode.CurrentTerm {
-				a.SrvNode.CurrentTerm = term
-				a.SrvNode.State = Follower
-				a.SrvNode.TruncNodeFile(int64(unsafe.Sizeof(a.SrvNode)))
-				if err := a.SrvNode.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
-					log.Printf("%s failed to persist server state to disk on AppendEntry request: %v", a.SrvNode.Name, err)
+		if appendResponse != nil {
+			if appendResponse.GetSuccess() {
+				totalVote++
+				if totalVote >= avgSrvCount {
+					a.AddEntryToNode(request)
+					break
 				}
-				break
+			} else {
+				term := appendResponse.GetTerm()
+				if term >= a.SrvNode.CurrentTerm {
+					a.SrvNode.CurrentTerm = term
+					a.SrvNode.State = Follower
+					a.SrvNode.TruncNodeFile(int64(unsafe.Sizeof(a.SrvNode)))
+					if err := a.SrvNode.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
+						log.Printf("%s failed to persist server state to disk on AppendEntry request: %v", a.SrvNode.Name, err)
+					}
+					break
+				}
 			}
 		}
 	}
@@ -164,20 +194,24 @@ func (a *AppendLog) AddEntryToNode(req *pb.AppendEntryRequestDetail) {
 	a.SrvNode.LogEntry = append(a.SrvNode.LogEntry, reqEntries...)
 }
 
-func (a *AppendLog) AppendEntryLog(req *pb.AppendEntryRequestDetail) pb.AppendEntryResponse {
+func (a *AppendLog) AppendEntryLog(req *pb.AppendEntryRequestDetail) (*pb.AppendEntryResponse, error) {
+	if len(req.Entry) < 1 {
+		return nil, nil
+	}
+
 	if a.SrvNode.CurrentTerm >= req.GetTerm() {
-		return pb.AppendEntryResponse{
+		return &pb.AppendEntryResponse{
 			Term:    a.SrvNode.CurrentTerm,
 			Success: false,
-		}
+		}, nil
 	}
 	entry := lastEntry(a.SrvNode)
 	if a.SrvNode.CurrentTerm < req.GetTerm() {
 		if req.GetPrevLogIndex() < int64(entry.Id) || req.GetPrevLogTerm() < entry.Term {
-			return pb.AppendEntryResponse{
+			return &pb.AppendEntryResponse{
 				Term:    req.GetTerm(),
 				Success: false,
-			}
+			}, nil
 		}
 	}
 
@@ -186,10 +220,10 @@ func (a *AppendLog) AppendEntryLog(req *pb.AppendEntryRequestDetail) pb.AppendEn
 
 	a.SrvNode.TruncNodeFile(int64(unsafe.Sizeof(a.SrvNode)))
 	if err := a.SrvNode.PersistToDisk(0644, os.O_CREATE|os.O_WRONLY); err != nil {
-		log.Fatalf("%s failed to persist server state to disk on AppendEntry request: %v", a.SrvNode.Name, err)
+		return nil, fmt.Errorf("%s failed to persist server state to disk on AppendEntry request: %v", a.SrvNode.Name, err)
 	}
-	return pb.AppendEntryResponse{
+	return &pb.AppendEntryResponse{
 		Term:    req.GetTerm(),
 		Success: true,
-	}
+	}, nil
 }
